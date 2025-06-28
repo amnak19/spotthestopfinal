@@ -1,9 +1,12 @@
 from flask import Flask, request, jsonify
 from PIL import Image
-import io
 import os
 
 app = Flask(__name__)
+
+# Load model once at startup (outside route)
+from ultralytics import YOLO
+model = YOLO('best.pt')
 
 @app.route('/')
 def home():
@@ -12,29 +15,20 @@ def home():
 @app.route('/predict', methods=['POST'])
 def predict():
     try:
-        # Lazy import and model load
-        from ultralytics import YOLO
-        model = YOLO('best.pt')  # Only loads when this route is hit
-
-        # Check if image is included in the request
         if 'image' not in request.files:
             return jsonify({"error": "No image uploaded"}), 400
 
         file = request.files['image']
-
-        # Read image
         img = Image.open(file.stream).convert('RGB')
 
-        # Run YOLO detection
         results = model(img)
 
-        # Extract and simplify detection data
         detections = []
         for box in results[0].boxes:
             det = {
-                "box": box.xyxy[0].tolist(),       # [x1, y1, x2, y2]
-                "confidence": float(box.conf[0]),  # e.g., 0.98
-                "class_id": int(box.cls[0])        # e.g., 0
+                "box": box.xyxy[0].tolist(),
+                "confidence": float(box.conf[0]),
+                "class_id": int(box.cls[0])
             }
             detections.append(det)
 
@@ -44,5 +38,5 @@ def predict():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))  
+    port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
